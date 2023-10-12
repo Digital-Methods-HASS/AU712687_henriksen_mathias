@@ -1,0 +1,340 @@
+---
+title: 'Text mining, sentiment analysis, and visualization'
+date: 'created on 22 November 2020 and updated `r format(Sys.time(), "%d %B, %Y")`'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      warning = FALSE,
+                      message = FALSE)
+
+library(tidyverse)
+library(here)
+
+# For text mining:
+library(pdftools)
+library(tidytext)
+library(textdata) 
+library(ggwordcloud)
+
+# Note - Before lab:
+# Attach tidytext and textdata packages
+# Run: get_sentiments(lexicon = "nrc")
+# Should be prompted to install lexicon - choose yes!
+# Run: get_sentiments(lexicon = "afinn")
+# Should be prompted to install lexicon - choose yes!
+
+```
+
+Throughout this analysis I will attempt to answer the following questions. 
+
+
+What are the most common meaningful words and what emotions do you expect will dominate this volume?
+Are there any terms that are similarly ambiguous to the 'confidence' above?
+
+
+
+I'll be going through this .Rmd file to conduct a sentiment analysis of Game of Thrones.
+First I'll start by uploading the pdf to R Markdown which allows me to work with it.
+
+### Load Game of Thrones for reading
+```{r get-document}
+got_path <- here("data","got.pdf")
+got_text <- pdf_text(got_path)
+```
+
+
+Using the following command will let me select a specific page of the book, which will be displayed further down on the page. 
+```{r single-page}
+got_p9 <- got_text[9]
+got_p9
+```
+
+
+### Some wrangling:
+
+By entering the following code I've converted every line on every page to its own row while removing starting and trailing spaces.
+
+```{r split-lines}
+got_df <- data.frame(got_text) %>% 
+  mutate(text_full = str_split(got_text, pattern = '\n')) %>% 
+  unnest(text_full) %>% 
+  mutate(text_full = str_trim(text_full)) 
+
+
+```
+
+
+### Individual words in tidy format (tokens)
+
+This code will make a graph where all the words in the book are shown. The words are listed in their order of appearance, which results in the first few sections of the graph being the title sheet and chapter overview of the book, with every single word having their own column.
+
+```{r tokenize}
+got_tokens <- got_df %>% 
+  unnest_tokens(word, text_full)
+got_tokens
+
+```
+
+The following code will count the number of appearances every word has in the book. As expected filler words such as "the" "and" and "to" appear the most. I am not interested in these stop words so I will remove them for a better sentiment analysis. 
+```{r count-words}
+got_wc <- got_tokens %>% 
+  count(word) %>% 
+  arrange(-n)
+got_wc
+```
+
+
+### Remove stop words:
+
+The following code will remove the stop words from my word count which will give me the more interesting results.
+
+```{r stopwords}
+got_stop <- got_tokens %>% 
+  anti_join(stop_words) %>% 
+  select(-got_text)
+```
+
+Now check the counts again: 
+```{r count-words2}
+got_swc <- got_stop %>% 
+  count(word) %>% 
+  arrange(-n)
+got_swc
+```
+
+This shows that lordly titles, names and courtly functions are the words that occur most often in Game of Thrones
+
+
+This code will remove numbers from the word count. Earlier when I tidied the individual words into got_tokens numbers were included in the count. The result of running this code will be identical to the results in got_tokens only this time all the numbers will be removed. 
+```{r skip-numbers}
+
+got_no_numeric <- got_stop %>% 
+  filter(is.na(as.numeric(word)))
+```
+
+### A word cloud of Game of Thrones report words (non-numeric)
+
+Creating a word cloud gives me a greater overview of the words that are of interest to me. By running the following code I will make a list where only the top 100 words in the book appears.
+```{r wordcloud-prep}
+
+length(unique(got_no_numeric$word))
+
+
+got_top100 <- got_no_numeric %>% 
+  count(word) %>% 
+  arrange(-n) %>% 
+  head(100)
+```
+Now that the list of the top 100 words has been generated, I will plot it into ggplot to hopefully make an alluring graph.
+
+```{r wordcloud}
+got_cloud <- ggplot(data = got_top100, aes(label = word)) +
+  geom_text_wordcloud() +
+  theme_minimal()
+
+got_cloud
+```
+
+By adding some colours and modifying the sizes of the words I will improve the appearance of the graph.
+```{r wordcloud-pro}
+ggplot(data = got_top100, aes(label = word, size = n)) +
+  geom_text_wordcloud_area(aes(color = n), shape = "diamond") +
+  scale_size_area(max_size = 12) +
+  scale_color_gradientn(colors = c("darkgreen","blue","red")) +
+  theme_minimal()
+```
+Adding colours and making the top words bigger than the rest makes it easier to understand the graph and quickly get an overview of the most used words in Game of Thrones. 
+
+
+### Sentiment analysis
+
+Now I'll begin the actualy sentiment analysis of Game of Thrones. This analysis will determine whether there's an abundance of words with negative or positive connotation. 
+
+To conduct a sentiment analysis I need to use a preexisting "sentiment lexicon". These lexica have different ways of ranking the sentiment of words.    
+
+These are the three lexica I will run and use for my analysis.
+
+  -  AFINN from Finn Årup Nielsen,
+  -  bing from Bing Liu and collaborators, and
+  -  nrc from Saif Mohammad and Peter Turney
+
+
+Now I will load in the different lexica and see how they work.
+
+
+"afinn": Words ranked from -5 (very negative) to +5 (very positive)
+afinn ranks the words based on a -5 to +5 scale. This allows a more diverse analysis of words, as not all negative words share the same amount of negativity and vice versa for positive words. 
+```{r afinn}
+get_sentiments(lexicon = "afinn")
+
+afinn_pos <- get_sentiments("afinn") %>% 
+  filter(value %in% c(3,4,5))
+
+afinn_pos
+```
+The code run above splits the words into two parts. One full of mainly positive and one full of mainly negative words. It shows us that words on either extreme of the scale are rare compared to the more moderate words (-2 to +2)
+
+
+bing: 
+
+bing sorts the words in a binary way. The words are either positive or negative, which makes it easy to work out whether a word is negative or positive, but eliminates the nuances between words. In the afinn lexicon the negative words were ranked on a -5 to 0 and allows us to see the differences between the negative and positive words. This is not possible with this lexicon. 
+```{r bing}
+get_sentiments(lexicon = "bing")
+```
+
+nrc:https://saifmohammad.com/WebPages/NRC-Emotion-Lexicon.htm
+
+The NRC lexicon ties words to emotions such as anger, sadness and fear while also sorting the words into positive and negative. 
+
+**Citation for NRC lexicon**: Crowdsourcing a Word-Emotion Association Lexicon, Saif Mohammad and Peter Turney, Computational Intelligence, 29 (3), 436-465, 2013.
+
+Now nrc:
+```{r nrc}
+get_sentiments(lexicon = "nrc")
+```
+
+Now that the lexica have been loaded, shown off and understood, I will use these lexica on Game of Thrones. 
+
+
+### Sentiment analysis with afinn: 
+
+First I bind the words in `got_stop` to `afinn` lexicon:
+```{r bind-afinn}
+got_afinn <- got_stop %>% 
+  inner_join(get_sentiments("afinn"))
+```
+
+Now that the words have been ranked by the afinn lexicon I will count the words and plot them based on their afinn score.
+```{r count-afinn}
+got_afinn_hist <- got_afinn %>% 
+  count(value)
+
+ggplot(data = got_afinn_hist, aes(x = value, y = n)) +
+  geom_col()
+```
+
+
+
+Using the following code I can take a closer look at the individual words based on their score. The value in the filter() sets what afinn value the words I am shown have been assigned. 
+```{r afinn-2}
+got_afinn2 <- got_afinn %>% 
+  filter(value == -2)
+```
+Now I can plot the words based the frequency with which they appear in the book. 
+```{r afinn-2-more}
+
+unique(got_afinn2$word)
+
+got_afinn2_n <- got_afinn2 %>% 
+  count(word, sort = TRUE) %>% 
+  mutate(word = fct_reorder(factor(word), n))
+
+
+ggplot(data = got_afinn2_n, aes(x = word, y = n)) +
+  geom_col() +
+  coord_flip()
+
+```
+Because of my tiny screen the words on the "Y" axis are very much crammed together. I can however see what words appear the most on the second page of the graph, which shows me that "fire" and "nervous" are the most common words used. 
+
+Looking at the got_afinn2 file, I can see that both "fire" and "nervous" has been assigned af -2 value, which means it is seen as a negative word by the afinn lexicon. I would however not classify "fire" as a negative word. One could argue however that in the context of Game of Thrones "fire" is mainly used when talking about dragons and how they were used as weapons. "Nervous" however I would not classify as a negative word but rather a neutral one. In some contexts nervous is negative but it can be positive in other contexts. 
+
+Because the lexica give all words the same score independent of the context in which they appear makes sentiment analysis a little challenging. As mentioned before "fire" in Game of Thrones can be used as a reference to dragons but also a reference to a simple fire, which one might use to warm up during the winter.
+
+
+Or we can summarize sentiment for the report: 
+```{r summarize-afinn}
+got_summary <- got_afinn %>% 
+  summarize(
+    mean_score = mean(value),
+    median_score = median(value)
+  )
+```
+
+The afinn lexicon summary puts Game of Thrones at a -0.54 mean score and a -1 median score which puts the overrall sentiment of Game of Thrones in the slightly negative category. 
+
+This part of the analysis gives me the answers needed to answer one of the two question I am working with. 
+
+What are the most common meaningful words and what emotions do you expect will dominate this volume?
+
+The emotions that dominate this volume are slightly negative. The first part of the question I understand as the most common words in the book that aren't stop words. The three most common words are "fire", "nervous", and "fear"
+
+### NRC lexicon for sentiment analysis
+
+Now I'll run a sentiment analysis using the NRC lexicon
+
+```{r bind-bing}
+got_nrc <- got_stop %>% 
+  inner_join(get_sentiments("nrc"))
+```
+
+Wait, won't that exclude some of the words in our text? YES! We should check which are excluded using `anti_join()`:
+The tutorial informs that sometimes the code I ran above will exclude some words in the given text. Therefore I will run the following code to check for words that have potentially been left out.
+
+```{r check-exclusions}
+got_exclude <- got_stop %>% 
+  anti_join(get_sentiments("nrc"))
+
+
+
+got_exclude_n <- got_exclude %>% 
+  count(word, sort = TRUE)
+
+head(got_exclude_n)
+```
+
+
+
+Now the words have been counted I will plot them with ggplot. The graph will show what words have been tied to what emotion which NCR sorts after. 
+
+Or count by sentiment *and* word, then facet:
+```{r count-nrc}
+got_nrc_n5 <- got_nrc %>% 
+  count(word,sentiment, sort = TRUE) %>% 
+  group_by(sentiment) %>% 
+  top_n(5) %>% 
+  ungroup()
+
+got_nrc_gg <- ggplot(data = got_nrc_n5, aes(x = reorder(word,n), y = n, fill = sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sentiment, ncol = 2, scales = "free") +
+  coord_flip() +
+  theme_minimal() +
+  labs(x = "Word", y = "count")
+
+got_nrc_gg
+
+ggsave(plot = got_nrc_gg, 
+       here("figures","got_nrc_sentiment.png"), 
+       height = 8, 
+       width = 5)
+
+```
+The graph shows that "lord" has been listed as both negative and positive which are two opposing qualities. Not only has "lord" been sorted as negative and positive, but also as trust and disgust. To be completely sure I will check with the following code.
+
+```{r nrc-lord}
+conf <- get_sentiments(lexicon = "nrc") %>% 
+  filter(word == "lord")
+
+conf
+```
+
+This shows that "lord" has indeed been sorted into both negative and positive emotions. 
+
+
+
+## Your task
+
+"What are the most common meaningful words and what emotions do you expect will dominate this volume?"
+
+The emotions that dominate this volume are slightly negative. The first part of the question I understand as the most common words in the book that aren't stop words. The three most common words are "fire", "nervous", and "fear"
+
+"Are there any terms that are similarly ambiguous to the 'confidence' above?" 
+
+As shown just above, the term "lord" has been assigned ambiguous qualities, having been assigned both "trust" and "disgust" as well as both "negative" and "positive"
+
+
+### Credits: 
+This tutorial is inspired by Allison Horst's Advanced Statistics and Data Analysis.
