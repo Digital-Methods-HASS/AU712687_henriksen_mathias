@@ -1,0 +1,93 @@
+---
+title: "Project_Suicides"
+output: html_document
+date: "2023-11-01"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(lubridate)
+```
+
+## Suicide Attempts Graphs
+
+Graphs of suicide attempts in Denmark. Graph over the total attempts and age ranges 15-19, 20-29 and 30-39
+
+
+Total attempts
+```{r Suicide Attempts}
+ggplot(data = Suicides2, aes( x = Year, y = Suicide_attempts)) +
+  geom_line()
+```
+
+
+15-19
+```{r Suicide Attempts 15-19}
+ggplot(data = Suicides2, aes( x =Year, y = Suicide_attempts_1519)) + 
+  geom_line(colour="red")
+```
+
+20-29 
+```{r Suicide Attempts 20-29}
+ggplot(data = Suicides2, aes( x =Year, y = Suicide_attempts_2029)) + 
+  geom_line(colour="orange")
+```
+
+30-39
+```{r Suicide Attempts 30-39}
+ggplot(data = Suicides2, aes( x =Year, y = Suicide_attempts_3039)) + 
+  geom_line(colour="blue")
+```
+Suicide attempts rates compared
+```{r Suicide Attempts Rates compared}
+ggplot(data = Suicides2, aes( x =Year)) + 
+  geom_line(aes( y = Suicide_attempts_2029), colour="orange") +
+  geom_line(aes( y = Suicide_attempts_1519), colour="red") + 
+  geom_line(aes( y = Suicide_attempts_3039), colour="blue")
+```
+Red = 15-19
+Orange = 20-29
+Blue = 30-39
+
+## Suicides
+
+
+Total suicide rates and for ages 20-29 and 30-39. Because some of the suicides in the 15-19 age group are minors, the data for this group is not available.
+
+Total suicides
+```{r Suicides}
+ggplot(data = Suicides2, aes( x =Year, y = Suicides)) + 
+  geom_line()
+```
+
+Suicides 20-29
+```{r Suicides 20-29}
+ggplot(data = Suicides2, aes( x =Year, y = Suicides_2029)) + 
+  geom_line(colour ="orange")
+```
+
+Suicides 30-39
+```{r Suicides 30-39}
+ggplot(data = Suicides2, aes( x =Year, y = Suicides_3039)) + 
+  geom_line(colour="blue")
+```
+
+Comparison of suicide rates age range 20-29 and 30-39
+```{r Suicide Rates comparison}
+ggplot(data = Suicides2, aes( x =Year)) + 
+  geom_line(aes(y = Suicides_2029), colour="orange") + 
+  geom_line(aes(y = Suicides_3039), colour="blue")
+```
+Orange = 20-29
+Blue = 30-39
+
+##Amount of people on antidepressants
+
+```{r People on antidepressants}
+ggplot(data = Suicides2, aes( x =Year, y = People_on_antidepressants)) +
+  geom_line()
+```
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
